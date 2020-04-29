@@ -183,43 +183,47 @@ async function deleteSavedOtp(phone) {
   return res;
 }
 
-app.post("/signup-otp", async (req, res) => {
+app.post("/signup-otp", async (req, res, next) => {
   try {
-    let otp = req.body.otp;
     let savedOtp = await Otp.findOne({ phone: req.body.phone });
 
     if (!savedOtp) {
       throw new Error("Phone Not Registered!");
     }
-    var otpValidates = Speakeasy.totp.verify({
-      secret: savedOtp.secret,
-      encoding: "base32",
-      token: otp,
-      window: 6
-    });
 
-    if (!otpValidates) {
-      await deleteSavedOtp(req.body.phone);
-      res.send({ message: "worng otp", done: false });
+    let user = await User.findOne({ email: savedOtp.email });
+    if (!user) {
+      let user = await new User({
+        email: savedOtp.email,
+        secret: savedOtp.secret,
+        address: savedOtp.address,
+        phone: savedOtp.phone,
+        firstname: savedOtp.firstname,
+        lastname: savedOtp.lastname,
+        cardNumber: savedOtp.cardNumber,
+        exp: savedOtp.exp,
+        cvv: savedOtp.cvv
+      });
+      await user.save();
+      passport.authenticate("local", async (err, user, info) => {
+        console.log("info :>> ", info);
+        if (err) {
+          await user.deleteOne({ phone: req.body.phone });
+          res.send({ verified: false, message: err.message });
+        } else if (!user) {
+          await user.deleteOne({ phone: req.body.phone });
+          res.send({ verified: false, message: "User Not Verified" });
+        } else {
+          req.logIn(user, err => {
+            if (err) {
+              throw err;
+            } else {
+              res.send({ verified: true, message: "User Registered" , user});
+            }
+          });
+        }
+      })(req, res, next);
     } else {
-      let user = await User.findOne({ email: savedOtp.email });
-      if (!user) {
-        let user = await new User({
-          email: savedOtp.email,
-          secret: savedOtp.secret,
-          address: savedOtp.address,
-          phone: savedOtp.phone,
-          firstname: savedOtp.firstname,
-          lastname: savedOtp.lastname,
-          cardNumber: savedOtp.cardNumber,
-          exp: savedOtp.exp,
-          cvv: savedOtp.cvv
-        });
-        await user.save();
-        await deleteSavedOtp(req.body.phone);
-        res.send({ message: "User Registered", user, done: true });
-      }
-      await deleteSavedOtp(req.body.phone);
       res.send({ message: "User Already Exist", done: false });
     }
   } catch (err) {
@@ -250,14 +254,14 @@ app.post("/transaction", async (req, res) => {
   }
 });
 
-app.get('/transaction/:transactionId', async(req, res) => {
-  try{
+app.get("/transaction/:transactionId", async (req, res) => {
+  try {
     let transaction = await Transaction.findById(req.params.transactionId);
-    res.send({message: "transaction Found", transaction});
-  }catch(err){
-    res.status(500).send(err.message)
+    res.send({ message: "transaction Found", transaction });
+  } catch (err) {
+    res.status(500).send(err.message);
   }
-})
+});
 
 app.post("/checkout", async (req, res) => {
   try {
