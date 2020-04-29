@@ -29,7 +29,7 @@ async function otpVerify({
   let messageResponse = await client.messages.create(
     "LDOOIT",
     phoneToMessage,
-    "Your authentication OTP for DOO.it is " + otp
+    "Your authentication OTP for Close is " + otp
   );
 
   let storedOtp = await Otp.findOneAndUpdate(
